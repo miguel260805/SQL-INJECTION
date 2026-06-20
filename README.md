@@ -1,5 +1,4 @@
 # SQL-INJECTION
-
 # Práctica: Vulnerabilidad de Inyección SQL (SQLi)
 
 **Institución:** ESCOM - IPN | **Asignatura:** Bases de Datos
@@ -26,8 +25,7 @@ El archivo `app.py` es el corazón del proyecto. Hace tres cosas fundamentales p
   * `docker-compose.yml`: Se encarga de levantar ese contenedor y conectar el puerto 80 del contenedor al puerto `8080` de nuestra computadora para poder verlo en el navegador.
 
 ## 4. ¿Cómo arranca el proyecto?
-Para levantar el servidor y la base de datos, solo necesitas tener Docker Desktop abierto y ejecutar desde tu entorno (o dando clic derecho en el archivo `docker-compose.yml` y seleccionando "Compose Up"):
+Para levantar el servidor y la base de datos, solo necesitas tener Docker Desktop abierto y ejecutar (dando clic derecho en el archivo `docker-compose.yml` y seleccionando "Compose Up"):
 
 ```bash
-docker-compose up -d
 docker-compose up -d
