@@ -1,31 +1,161 @@
 # SQL-INJECTION
-# Práctica: Vulnerabilidad de Inyección SQL (SQLi)
+# Laboratorio de Ciberseguridad: Explotación de Vulnerabilidad SQL Injection (SQLi)
 
-**Institución:** ESCOM - IPN | **Asignatura:** Bases de Datos
-**Desarrollador:** Juárez Bobadilla Miguel Isaí
+Entorno de pruebas controlado (Sandbox) diseñado para la demostración técnica de vulnerabilidades de seguridad en bases de datos relacionales. El sistema permite auditar la evasión de mecanismos de autenticación mediante la inyección directa de sentencias lógicas en el backend, documentando el ciclo completo desde la falla hasta su remediación.
+
+**Institución:** Instituto Politécnico Nacional (IPN) - ESCOM
+**Asignatura:** Bases de Datos
+**Autor:** Juárez Bobadilla Miguel Isaí
 
 ---
 
-## 1. ¿Cómo se creó y qué hace este proyecto?
-Este proyecto nació como una práctica de laboratorio para demostrar de forma controlada cómo funciona un ataque de Inyección SQL (SQLi). 
+## Enlaces del Proyecto
 
-El sistema simula un portal de acceso (login) para una biblioteca. Su funcionamiento consiste en recibir un usuario y contraseña a través de un formulario HTML, consultar esos datos en una base de datos y, dependiendo del resultado, otorgar o denegar el acceso. La finalidad del proyecto es mostrar visualmente cómo un atacante puede evadir esta seguridad escribiendo código SQL directamente en la caja de texto.
+* **Código Fuente:** [Repositorio en GitHub](https://github.com/miguel260805/SQL-INJECTION)
 
-## 2. ¿Qué hace el código Python (`app.py`)?
-El archivo `app.py` es el corazón del proyecto. Hace tres cosas fundamentales paso a paso:
-1. **Prepara la base de datos:** Al iniciar, utiliza la librería `sqlite3` para crear una base de datos local en memoria. Crea una tabla llamada `usuarios` e inserta un administrador con una contraseña secreta.
-2. **Levanta el servidor web:** Utiliza el framework `Flask` para montar la página web y mostrar el formulario HTML en el navegador.
-3. **Genera la vulnerabilidad:** Recibe lo que el usuario escribe en el formulario y lo pega (concatena) directamente en la consulta SQL. Como no filtra los caracteres especiales, permite que el texto ingresado altere la instrucción original de la base de datos.
+---
 
-## 3. Dockerización: ¿Cómo, por qué y para qué?
-* **¿Por qué fue necesario?** Para evitar el problema de "en mi máquina sí funciona". Si el profesor intenta correr el proyecto de Python puro, tendría que instalar Python, instalar Flask y configurar su entorno.
-* **¿Para qué sirve?** Docker empaqueta la aplicación con todo lo que necesita para funcionar de manera aislada. 
-* **¿Cómo se hizo?** Se crearon dos archivos:
-  * `Dockerfile`: Le dice a Docker que descargue una imagen de Python, instale Flask y copie nuestro archivo `app.py`.
-  * `docker-compose.yml`: Se encarga de levantar ese contenedor y conectar el puerto 80 del contenedor al puerto `8080` de nuestra computadora para poder verlo en el navegador.
+## Tecnologías Implementadas
 
-## 4. ¿Cómo arranca el proyecto?
-Para levantar el servidor y la base de datos, solo necesitas tener Docker Desktop abierto y ejecutar (dando clic derecho en el archivo `docker-compose.yml` y seleccionando "Compose Up"):
+* **Backend:** Python con el microframework Flask.
+* **Persistencia:** SQLite en memoria (entorno volátil y reproducible).
+* **Orquestación:** Docker y `docker-compose`, mapeado al puerto local `8080`.
+* **Clasificación de la Vulnerabilidad:** CWE-89 (Improper Neutralization of Special Elements used in an SQL Command).
+
+---
+
+## Evolución y Metodología de la Práctica
+
+El desarrollo de este laboratorio se fundamenta en una metodología de ingeniería estructurada, abarcando desde el diseño de la arquitectura vulnerable hasta la ejecución documentada del vector de ataque y su corrección.
+
+### Fase 1: Arquitectura y Levantamiento del Entorno
+
+Para garantizar un entorno reproducible, aislado y libre de conflictos de dependencias, se implementó una arquitectura basada en contenedores (Docker).
+
+* **Backend:** Desarrollo en `Python` utilizando el microframework `Flask` para la gestión de peticiones HTTP.
+* **Persistencia:** Motor `SQLite` configurado en memoria, garantizando la volatilidad de los datos para reiniciar el estado de la prueba en cada ejecución.
+* **Orquestación:** Despliegue automatizado mediante `docker-compose`, mapeando el servicio al puerto local `8080`.
+
+Durante el despliegue inicial, el sistema construye dinámicamente la entidad `usuarios` (id, usuario, password, rol) y aprovisiona un registro oculto con privilegios de administrador.
+
+<div align="center">
+  <img loading="lazy" src="Imagenes/Documentacion/arquitectura.png" alt="Arquitectura del entorno" width="700"/>
+  <br>
+  <em>Figura 1: Arquitectura del entorno de pruebas (Flask + SQLite + Docker).</em>
+</div>
+
+### Fase 2: Análisis de la Vulnerabilidad (Código Falla)
+
+La vulnerabilidad crítica (Clasificación CWE-89) reside en la capa de acceso a datos del backend (`app.py`). El sistema procesa los datos del cliente sin aplicar sanitización ni utilizar *Prepared Statements* (Consultas Parametrizadas).
+
+El texto crudo capturado en el formulario HTML se concatena de forma directa en la instrucción DML, permitiendo la manipulación de la consulta:
+
+```sql
+-- Estructura SQL vulnerable implementada en el backend:
+SELECT * FROM usuarios WHERE usuario = '{usuario_input}' AND password = '{password_input}'
+```
+
+El problema central es que `{usuario_input}` y `{password_input}` se insertan tal cual el usuario los escribió, sin ningún tratamiento previo. Cualquier carácter de control SQL (como una comilla simple) rompe la estructura que el desarrollador tenía en mente.
+
+<div align="center">
+  <img loading="lazy" src="Imagenes/Documentacion/codigo-vulnerable.png" alt="Código vulnerable" width="700"/>
+  <br>
+  <em>Figura 2: Fragmento de app.py donde se concatena la entrada del usuario sin sanitizar.</em>
+</div>
+
+### Fase 3: Vector de Ataque (Explotación)
+
+El atacante no necesita conocer la contraseña: le basta con alterar la **lógica booleana** de la cláusula `WHERE` para que siempre se evalúe como verdadera, anulando por completo la verificación de la contraseña.
+
+Un payload clásico para el campo `usuario` tiene la forma:
+
+```
+' OR '1'='1' --
+```
+
+Al insertarse en la plantilla original, la consulta que finalmente recibe el motor de base de datos queda estructurada así:
+
+```sql
+SELECT * FROM usuarios WHERE usuario = '' OR '1'='1' --' AND password = '...'
+```
+
+| Fragmento | Función |
+|---|---|
+| `'` | Cierra prematuramente la cadena de `usuario`, rompiendo la sintaxis esperada. |
+| `OR '1'='1'` | Introduce una condición que siempre es verdadera, sin importar el valor real. |
+| `--` | Comenta el resto de la sentencia original (incluida la verificación de `password`), neutralizándola. |
+
+Como la cláusula `WHERE` se evalúa como verdadera para cualquier fila, el motor retorna el primer registro de la tabla `usuarios` —típicamente la cuenta administrativa— concediendo acceso sin conocer credenciales válidas.
+
+<div align="center">
+  <img loading="lazy" src="Imagenes/Documentacion/explotacion.png" alt="Evidencia de explotación" width="700"/>
+  <br>
+  <em>Figura 3: Acceso obtenido al inyectar el payload en el formulario de login.</em>
+</div>
+
+### Fase 4: Remediación (Implementación Segura)
+
+La corrección estructural consiste en separar el **código SQL** de los **datos del usuario**, delegando al driver de base de datos el escapado seguro mediante **Prepared Statements** (consultas parametrizadas). De este modo, el contenido ingresado por el usuario nunca se interpreta como sintaxis SQL, sin importar qué caracteres contenga.
+
+```python
+# Antes (vulnerable):
+query = f"SELECT * FROM usuarios WHERE usuario = '{usuario_input}' AND password = '{password_input}'"
+cursor.execute(query)
+
+# Después (remediado):
+query = "SELECT * FROM usuarios WHERE usuario = ? AND password = ?"
+cursor.execute(query, (usuario_input, password_input))
+```
+
+Con esta implementación, el payload `' OR '1'='1' --` deja de tener efecto: el motor de base de datos lo trata como un valor literal de texto a buscar en la columna `usuario`, no como código ejecutable.
+
+**Medidas complementarias:**
+
+* **Hash de contraseñas** (p. ej. bcrypt/argon2) en lugar de texto plano.
+* **Principio de mínimo privilegio** en la cuenta de base de datos usada por la aplicación.
+* **Validación de entrada** como capa adicional (defensa en profundidad), nunca como única protección.
+
+<div align="center">
+  <img loading="lazy" src="Imagenes/Documentacion/remediacion.png" alt="Código remediado" width="700"/>
+  <br>
+  <em>Figura 4: Consulta parametrizada bloqueando el payload de inyección.</em>
+</div>
+
+---
+
+## Galería del Sistema
+
+<details>
+<summary>Ver capturas de pantalla del laboratorio</summary>
+
+| Formulario de Login (Vulnerable) | Acceso No Autorizado Obtenido |
+|:---:|:---:|
+| <img loading="lazy" src="Imagenes/Documentacion/login.png" alt="Login" width="400"/> | <img loading="lazy" src="Imagenes/Documentacion/acceso.png" alt="Acceso obtenido" width="400"/> |
+
+| Consulta Vulnerable en Logs | Consulta Remediada en Logs |
+|:---:|:---:|
+| <img loading="lazy" src="Imagenes/Documentacion/log-vulnerable.png" alt="Log vulnerable" width="400"/> | <img loading="lazy" src="Imagenes/Documentacion/log-remediado.png" alt="Log remediado" width="400"/> |
+
+</details>
+
+---
+
+## Cómo Ejecutar el Proyecto
 
 ```bash
-docker-compose up -d
+# Clonar el repositorio
+git clone https://github.com/miguel260805/SQL-INJECTION.git
+cd SQL-INJECTION
+
+# Levantar el entorno con Docker
+docker-compose up --build
+
+# La aplicación quedará disponible en:
+# http://localhost:8080
+```
+
+---
+
+## Conclusiones
+
+Este laboratorio evidencia que una vulnerabilidad de inyección SQL no requiere herramientas sofisticadas para ser explotada: basta con comprender cómo el backend construye sus consultas. Al mismo tiempo, demuestra que la remediación es, en la mayoría de los casos, sencilla de implementar mediante consultas parametrizadas. La práctica refuerza la importancia de tratar toda entrada del usuario como no confiable por defecto, principio fundamental del desarrollo seguro de software.
