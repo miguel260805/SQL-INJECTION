@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  sitio-vulnerable-sqli:
+    build: .
+    container_name: app_inyeccion_sql
+    ports:
+      - "8080:80"
+    restart: unless-stopped
